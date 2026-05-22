@@ -20,7 +20,7 @@ IO.puts("Loading Silero VAD...")
 {:ok, vad} = ArmAI.SileroVAD.load(model_path)
 
 IO.puts("Decoding audio...")
-pcm = ArmAI.Audio.load_for_whisper(audio_path)
+pcm = InferAudio.Decoder.load_for_whisper(audio_path)
 
 IO.puts("Running VAD over #{Float.round(Nx.size(pcm) / 16_000, 2)} s of audio...")
 {us, segments} =

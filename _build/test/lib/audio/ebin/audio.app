@@ -1,0 +1,11 @@
+{application,audio,
+             [{modules,['Elixir.ArmAICase','Elixir.Audio',
+                        'Elixir.Audio.Backend','Elixir.Audio.Decoder',
+                        'Elixir.Audio.Piper','Elixir.Audio.SileroVAD']},
+              {optional_applications,[rustler]},
+              {applications,[kernel,stdlib,elixir,logger,nx,nx_primitives,
+                             vision,arm_ai,nx_arm,rustler,
+                             rustler_precompiled]},
+              {description,"Generic Nx-tensor audio I/O + model wrappers (Silero VAD / Piper TTS) with a pluggable native backend (see `Audio.Backend`)."},
+              {registered,[]},
+              {vsn,"0.1.0"}]}.

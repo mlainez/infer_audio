@@ -1,4 +1,4 @@
-defmodule ArmAudio.Piper do
+defmodule InferAudio.Piper do
   @moduledoc """
   Text-to-speech via Piper VITS models (ONNX export from
   https://github.com/rhasspy/piper).
@@ -6,16 +6,16 @@ defmodule ArmAudio.Piper do
   Piper distributes its voices as `<voice>.onnx` + `<voice>.onnx.json`
   config. The ONNX graph takes phoneme IDs and emits f32 audio
   samples at the model's sample rate (typically 22050 Hz). We route
-  it through the existing `ArmVision.Onnx` bridge — tract handles
+  it through the existing `InferVision.Onnx` bridge — tract handles
   every op Piper uses.
 
   ## Synthesis pipeline
 
-      {:ok, piper} = ArmAudio.Piper.load("/root/en_US-amy-medium.onnx")
+      {:ok, piper} = InferAudio.Piper.load("/root/en_US-amy-medium.onnx")
       # phoneme_ids: list of integers (the user / their phonemiser
       # produces these; eSpeak NG is the canonical source).
-      samples = ArmAudio.Piper.synthesize(piper, phoneme_ids)
-      ArmAudio.Decoder.write_wav("/data/out.wav", samples, sample_rate: 22050)
+      samples = InferAudio.Piper.synthesize(piper, phoneme_ids)
+      InferAudio.Decoder.write_wav("/data/out.wav", samples, sample_rate: 22050)
 
   Phonemisation is **not** done here — eSpeak NG is a C library and
   on-device phonemisation is rare. For most Nerves use cases the
@@ -34,7 +34,7 @@ defmodule ArmAudio.Piper do
   def load(path, opts \\ []) do
     sample_rate = Keyword.get(opts, :sample_rate, 22050)
 
-    case ArmVision.Onnx.load(path) do
+    case InferVision.Onnx.load(path) do
       {:ok, model} -> {:ok, %__MODULE__{onnx: model, sample_rate: sample_rate}}
       err -> err
     end
@@ -79,7 +79,7 @@ defmodule ArmAudio.Piper do
     inputs =
       Map.filter(inputs, fn {name, _} -> name in onnx.input_names end)
 
-    outputs = ArmVision.Onnx.run(onnx, inputs)
+    outputs = InferVision.Onnx.run(onnx, inputs)
 
     # Piper's single output is named "output" by convention; pick
     # whatever the model actually exposes and reshape to 1-D.

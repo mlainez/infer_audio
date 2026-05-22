@@ -46,5 +46,5 @@ IO.puts("Synthesizing audio...")
 IO.puts("  → #{Nx.size(samples)} samples (#{Float.round(Nx.size(samples) / 22_050, 2)} s) in #{div(us, 1000)} ms")
 
 out_path = "/root/tts_output.wav"
-:ok = ArmAI.Audio.write_wav(out_path, samples, sample_rate: 22_050)
+:ok = InferAudio.Decoder.write_wav(out_path, samples, sample_rate: 22_050)
 IO.puts("Wrote #{out_path}")

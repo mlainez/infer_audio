@@ -1,19 +1,19 @@
-defmodule ArmAudio.SileroVAD do
+defmodule InferAudio.SileroVAD do
   @moduledoc """
   Voice activity detection via Silero VAD (ONNX export).
 
   Silero VAD is a 1.8 MB ONNX model that classifies 16 kHz audio
   windows as speech / non-speech. Runs through our existing
-  `ArmVision.Onnx` bridge.
+  `InferVision.Onnx` bridge.
 
   Use case on Nerves: gate Whisper transcription on actually
   hearing a voice (saves cycles vs running Whisper on silence).
 
   ## Pipeline
 
-      {:ok, vad} = ArmAudio.SileroVAD.load("/root/silero_vad.onnx")
-      pcm = ArmAudio.Decoder.load_for_whisper("/data/clip.wav")
-      segments = ArmAudio.SileroVAD.detect(vad, pcm, threshold: 0.5)
+      {:ok, vad} = InferAudio.SileroVAD.load("/root/silero_vad.onnx")
+      pcm = InferAudio.Decoder.load_for_whisper("/data/clip.wav")
+      segments = InferAudio.SileroVAD.detect(vad, pcm, threshold: 0.5)
       # segments = [%{start_ms: 320, end_ms: 1840}, ...]
 
   Download: <https://github.com/snakers4/silero-vad>
@@ -29,7 +29,7 @@ defmodule ArmAudio.SileroVAD do
   @doc "Load the Silero VAD ONNX model."
   @spec load(Path.t()) :: {:ok, %__MODULE__{}} | {:error, term()}
   def load(path) do
-    case ArmVision.Onnx.load(path) do
+    case InferVision.Onnx.load(path) do
       {:ok, model} -> {:ok, %__MODULE__{onnx: model}}
       err -> err
     end
@@ -58,7 +58,7 @@ defmodule ArmAudio.SileroVAD do
           |> Nx.backend_copy(NxArm.Backend)
 
         outputs =
-          ArmVision.Onnx.run(model, %{
+          InferVision.Onnx.run(model, %{
             "input" => window,
             "sr" => sr,
             "h" => h,

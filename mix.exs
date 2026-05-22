@@ -1,19 +1,19 @@
-defmodule ArmAudio.MixProject do
+defmodule InferAudio.MixProject do
   use Mix.Project
 
   @version "0.1.0"
 
   def project do
     [
-      app: :arm_audio,
+      app: :infer_audio,
       version: @version,
       elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      name: "ArmAudio",
+      name: "Audio",
       description:
-        "Nx-tensor audio I/O + model wrappers on ARM CPUs (Silero VAD / Piper TTS via tract-onnx, symphonia decode, rubato resample)",
+        "Generic Nx-tensor audio I/O + model wrappers (Silero VAD / Piper TTS) with a pluggable native backend (see `InferAudio.Backend`).",
       package: package(),
       docs: [main: "readme", extras: ["README.md"]]
     ]
@@ -26,23 +26,23 @@ defmodule ArmAudio.MixProject do
 
   defp deps do
     [
-      {:rustler, "~> 0.36", optional: true},
-      {:rustler_precompiled, "~> 0.8"},
       {:nx, "~> 0.9"},
-      {:arm_ai, path: "../arm_ai"},
-      {:nx_arm, path: "../nx_arm"},
-      {:arm_nx_primitives, path: "../arm_nx_primitives"},
-      # SileroVAD + Piper drive their ONNX through ArmVision.Onnx.
-      {:arm_vision, path: "../arm_vision"}
+      {:nx_primitives, path: "../nx_primitives"},
+      # Silero VAD + Piper drive their ONNX through `Vision.Onnx`.
+      {:infer_vision, path: "../infer_vision"},
+      {:arm_ai, path: "../arm_ai", only: [:dev, :test]},
+      {:nx_arm, path: "../nx_arm", only: [:dev, :test]},
+      {:rustler, "~> 0.36", optional: true},
+      {:rustler_precompiled, "~> 0.8"}
     ]
   end
 
   defp package do
     [
-      name: :arm_audio,
+      name: :infer_audio,
       licenses: ["Apache-2.0"],
       files: ~w(lib mix.exs README.md),
-      links: %{"GitHub" => "https://github.com/marclainez/arm_audio"}
+      links: %{"GitHub" => "https://github.com/marclainez/infer_audio"}
     ]
   end
 end
