@@ -2,23 +2,33 @@ defmodule InferAudio.Backend do
   @moduledoc """
   Behaviour for audio inference + I/O backends.
 
-  An implementation provides:
+  Implementations provide:
 
-  * file decode + resample (symphonia/rubato or equivalent)
-  * Silero VAD load + detect
-  * Piper TTS load + synthesize
+  * file decode + resample (symphonia/rubato, ffmpeg, GStreamer, …)
+  * Silero VAD load + scoring
+  * Piper TTS load + synthesis
+
+  Each callback is intentionally *task-shaped* (`silero_vad_load`,
+  `silero_vad_scores`, …) — **not** ONNX-shaped — so backends that
+  bypass ONNX entirely can implement the same surface. Examples:
+
+  * `ArmAI.AudioBackend` runs the models through tract-onnx
+  * `OrtexAudio.Backend` (hypothetical) would use ONNX Runtime
+  * `HailoAudio.Backend` (hypothetical) would use Hailo's HEF runtime
+    on a Pi 5 + AI HAT
+  * `FfmpegAudio.Backend` could provide decode_file via FFmpeg
 
   ## Configuring the active backend
 
-      config :audio, backend: ArmAI.AudioBackend
-
-  Override per-call with `backend:` on any `Audio.*` function.
+      config :infer_audio, backend: ArmAI.AudioBackend
   """
+
+  # ---------------- audio I/O ----------------
 
   @doc "Decode an audio file. Returns `{:ok, %{samples: tensor, sample_rate: int, channels: int}}`."
   @callback decode_file(path :: String.t()) :: {:ok, map()} | {:error, term()}
 
-  @doc "Resample an Nx tensor of f32 samples from one sample-rate to another."
+  @doc "Resample an Nx tensor of f32 samples between two sample rates."
   @callback resample(samples :: Nx.Tensor.t(), from :: pos_integer(), to :: pos_integer()) ::
               Nx.Tensor.t()
 
@@ -28,11 +38,32 @@ defmodule InferAudio.Backend do
   @doc "Write a mono or stereo Nx audio tensor to a WAV file."
   @callback write_wav(path :: String.t(), samples :: Nx.Tensor.t() | binary(), opts :: keyword()) :: :ok
 
-  @doc "Load a Silero VAD ONNX model."
-  @callback silero_vad_load(path :: String.t()) :: {:ok, term()} | {:error, term()}
+  # ---------------- Silero VAD ----------------
 
-  @doc "Load a Piper TTS voice ONNX model."
+  @doc """
+  Load a Silero VAD model. The path is whatever the impl expects:
+  ONNX file for ortex/tract, HEF for Hailo, etc.
+  """
+  @callback silero_vad_load(path :: String.t(), opts :: keyword()) ::
+              {:ok, term()} | {:error, term()}
+
+  @doc """
+  Score a PCM tensor and return a per-window speech-probability
+  tensor (one value per 30 ms / 16 kHz window).
+  """
+  @callback silero_vad_scores(handle :: term(), pcm :: Nx.Tensor.t(), opts :: keyword()) ::
+              Nx.Tensor.t()
+
+  # ---------------- Piper TTS ----------------
+
+  @doc "Load a Piper TTS voice."
   @callback piper_load(path :: String.t(), opts :: keyword()) :: {:ok, term()} | {:error, term()}
+
+  @doc "Synthesize a phoneme-id sequence into a mono f32 audio tensor."
+  @callback piper_synthesize(handle :: term(), phoneme_ids :: [non_neg_integer()], opts :: keyword()) ::
+              Nx.Tensor.t()
+
+  # ---------------- resolution ----------------
 
   @doc """
   Return the configured backend module. Reads the `:backend`
@@ -44,11 +75,11 @@ defmodule InferAudio.Backend do
     case Keyword.get(opts, :backend) || Application.get_env(:infer_audio, :backend) do
       nil ->
         raise """
-        No Audio backend configured. Add one to your config:
+        No InferAudio backend configured. Add one to your config:
 
-            config :audio, backend: ArmAI.AudioBackend
+            config :infer_audio, backend: ArmAI.AudioBackend
 
-        Or pass `backend:` explicitly to the Audio.* call.
+        Or pass `backend:` explicitly to the InferAudio.* call.
         """
 
       backend when is_atom(backend) ->

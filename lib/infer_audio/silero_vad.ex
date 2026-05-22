@@ -1,91 +1,56 @@
 defmodule InferAudio.SileroVAD do
   @moduledoc """
-  Voice activity detection via Silero VAD (ONNX export).
+  Voice activity detection — generic API delegating to a configured
+  `InferAudio.Backend`.
 
-  Silero VAD is a 1.8 MB ONNX model that classifies 16 kHz audio
-  windows as speech / non-speech. Runs through our existing
-  `InferVision.Onnx` bridge.
-
-  Use case on Nerves: gate Whisper transcription on actually
-  hearing a voice (saves cycles vs running Whisper on silence).
-
-  ## Pipeline
+  Silero VAD is a small NN that classifies 16 kHz audio windows as
+  speech / non-speech. Use it to gate Whisper transcription on
+  actually hearing a voice (saves cycles vs running Whisper on
+  silence).
 
       {:ok, vad} = InferAudio.SileroVAD.load("/root/silero_vad.onnx")
       pcm = InferAudio.Decoder.load_for_whisper("/data/clip.wav")
       segments = InferAudio.SileroVAD.detect(vad, pcm, threshold: 0.5)
       # segments = [%{start_ms: 320, end_ms: 1840}, ...]
-
-  Download: <https://github.com/snakers4/silero-vad>
   """
 
-  defstruct [:onnx]
+  defstruct [:handle, :backend]
 
-  # Silero VAD processes audio in fixed 30 ms windows (480 samples
-  # at 16 kHz). The model is stateful via an h/c LSTM hidden state.
-  @window_samples 512
   @sample_rate 16_000
+  @window_samples 512
 
-  @doc "Load the Silero VAD ONNX model."
-  @spec load(Path.t()) :: {:ok, %__MODULE__{}} | {:error, term()}
-  def load(path) do
-    case InferVision.Onnx.load(path) do
-      {:ok, model} -> {:ok, %__MODULE__{onnx: model}}
-      err -> err
+  @doc """
+  Load a Silero VAD model. Path interpretation is up to the active
+  backend (ONNX file for ortex/tract, HEF for a Hailo impl, etc.).
+  """
+  @spec load(Path.t(), keyword()) :: {:ok, %__MODULE__{}} | {:error, term()}
+  def load(path, opts \\ []) do
+    backend = InferAudio.Backend.resolve(opts)
+
+    case backend.silero_vad_load(path, opts) do
+      {:ok, handle} -> {:ok, %__MODULE__{handle: handle, backend: backend}}
+      {:error, _} = err -> err
     end
   end
 
   @doc """
-  Slide the model across 30 ms windows and return the per-window
-  speech-probability tensor of shape `{n_windows}`.
+  Per-window speech-probability tensor of shape `{n_windows}`.
   """
-  @spec scores(%__MODULE__{}, Nx.Tensor.t()) :: Nx.Tensor.t()
-  def scores(%__MODULE__{onnx: model}, audio) do
-    samples = audio |> Nx.flatten() |> Nx.backend_copy(Nx.BinaryBackend)
-    n = Nx.size(samples)
-    n_windows = div(n, @window_samples)
-
-    # State buffers — Silero V4 uses h, c each shape {2, 1, 64}.
-    h0 = Nx.broadcast(0.0, {2, 1, 64})
-    c0 = Nx.broadcast(0.0, {2, 1, 64})
-    sr = Nx.tensor([@sample_rate], type: :s64)
-
-    {scores_acc, _h, _c} =
-      Enum.reduce(0..(n_windows - 1), {[], h0, c0}, fn i, {acc, h, c} ->
-        window =
-          Nx.slice(samples, [i * @window_samples], [@window_samples])
-          |> Nx.reshape({1, @window_samples})
-          |> Nx.backend_copy(NxArm.Backend)
-
-        outputs =
-          InferVision.Onnx.run(model, %{
-            "input" => window,
-            "sr" => sr,
-            "h" => h,
-            "c" => c
-          })
-
-        prob = outputs["output"] |> Nx.to_flat_list() |> hd()
-        h_new = outputs["hn"] || h
-        c_new = outputs["cn"] || c
-
-        {[prob | acc], h_new, c_new}
-      end)
-
-    scores_acc
-    |> Enum.reverse()
-    |> Nx.tensor(type: :f32)
-    |> Nx.backend_copy(NxArm.Backend)
+  @spec scores(%__MODULE__{}, Nx.Tensor.t(), keyword()) :: Nx.Tensor.t()
+  def scores(%__MODULE__{handle: handle, backend: backend}, audio, opts \\ []) do
+    backend.silero_vad_scores(handle, audio, opts)
   end
 
   @doc """
   Run VAD and return speech segments as `[%{start_ms, end_ms}]`.
 
-  Options:
+  ## Options
+
     * `:threshold` — probability cutoff (default 0.5)
     * `:min_speech_ms` — drop segments shorter than this (default 250)
     * `:min_silence_ms` — gap below threshold needed to break a
       segment (default 100)
+    * `:backend` — override the configured `InferAudio.Backend`
   """
   @spec detect(%__MODULE__{}, Nx.Tensor.t(), keyword()) ::
           [%{start_ms: non_neg_integer(), end_ms: non_neg_integer()}]
@@ -96,7 +61,7 @@ defmodule InferAudio.SileroVAD do
 
     window_ms = div(@window_samples * 1000, @sample_rate)
 
-    probs = vad |> scores(audio) |> Nx.backend_copy(Nx.BinaryBackend) |> Nx.to_flat_list()
+    probs = vad |> scores(audio, opts) |> Nx.to_flat_list()
 
     {_state, segments_rev} =
       Enum.with_index(probs)
@@ -105,11 +70,18 @@ defmodule InferAudio.SileroVAD do
         t = i * window_ms
 
         case {state, is_speech} do
-          {nil, true} -> {{:speech, t, t + window_ms, 0}, segs}
-          {nil, false} -> {nil, segs}
-          {{:speech, s, _e, _sil}, true} -> {{:speech, s, t + window_ms, 0}, segs}
+          {nil, true} ->
+            {{:speech, t, t + window_ms, 0}, segs}
+
+          {nil, false} ->
+            {nil, segs}
+
+          {{:speech, s, _e, _sil}, true} ->
+            {{:speech, s, t + window_ms, 0}, segs}
+
           {{:speech, s, e, sil}, false} ->
             new_sil = sil + window_ms
+
             if new_sil >= min_silence_ms do
               if e - s >= min_speech_ms do
                 {nil, [%{start_ms: s, end_ms: e} | segs]}

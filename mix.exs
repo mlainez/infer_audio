@@ -28,8 +28,9 @@ defmodule InferAudio.MixProject do
     [
       {:nx, "~> 0.9"},
       {:nx_primitives, path: "../nx_primitives"},
-      # Silero VAD + Piper drive their ONNX through `Vision.Onnx`.
-      {:infer_vision, path: "../infer_vision"},
+      # No dep on infer_vision — the backend handles VAD/Piper
+      # scoring internally so a Hailo / DSP / non-ONNX impl can
+      # plug in without dragging the vision stack along.
       {:arm_ai, path: "../arm_ai", only: [:dev, :test]},
       {:nx_arm, path: "../nx_arm", only: [:dev, :test]},
       {:rustler, "~> 0.36", optional: true},

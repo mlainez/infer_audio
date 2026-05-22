@@ -5,8 +5,7 @@
                         'Elixir.InferAudio.SileroVAD']},
               {optional_applications,[rustler]},
               {applications,[kernel,stdlib,elixir,logger,nx,nx_primitives,
-                             infer_vision,arm_ai,nx_arm,rustler,
-                             rustler_precompiled]},
+                             arm_ai,nx_arm,rustler,rustler_precompiled]},
               {description,"Generic Nx-tensor audio I/O + model wrappers (Silero VAD / Piper TTS) with a pluggable native backend (see `InferAudio.Backend`)."},
               {registered,[]},
               {vsn,"0.1.0"}]}.
