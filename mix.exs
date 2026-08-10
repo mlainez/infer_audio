@@ -27,12 +27,12 @@ defmodule InferAudio.MixProject do
   defp deps do
     [
       {:nx, "~> 0.9"},
-      {:nx_primitives, path: "../nx_primitives"},
+      {:nx_primitives, github: "mlainez/nx_primitives"},
       # No dep on infer_vision — the backend handles VAD/Piper
       # scoring internally so a Hailo / DSP / non-ONNX impl can
       # plug in without dragging the vision stack along.
-      {:arm_ai, path: "../arm_ai", only: [:dev, :test]},
-      {:nx_arm, path: "../nx_arm", only: [:dev, :test]},
+      {:arm_ai, github: "mlainez/arm_ai", only: [:dev, :test]},
+      {:nx_arm, github: "mlainez/nx_arm", only: [:dev, :test]},
       {:rustler, "~> 0.36", optional: true},
       {:rustler_precompiled, "~> 0.8"}
     ]
