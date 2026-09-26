@@ -48,17 +48,32 @@ defmodule InferAudio.DecoderTest do
   end
 
   describe "load_for_whisper/1" do
-    test "returns {:error, _} on missing file (or raises cleanly)" do
-      result =
-        try do
-          InferAudio.Decoder.load_for_whisper("/tmp/__no_such_audio.wav")
-        rescue
-          _ -> :raised
-        catch
-          :error, _ -> :raised
-        end
+    test "returns {:error, _} on a missing file" do
+      assert {:error, _} = InferAudio.Decoder.load_for_whisper("/tmp/__no_such_audio.wav")
+    end
+  end
 
-      assert match?({:error, _}, result) or result == :raised
+  describe "write_wav/3 + decode_file/1 round trip" do
+    @tag :tmp_dir
+    test "a written WAV decodes back to the same samples", %{tmp_dir: dir} do
+      path = Path.join(dir, "tone.wav")
+      tone = Nx.tensor(Enum.map(0..799, &(0.5 * :math.sin(&1 * 2 * :math.pi() / 40))), type: :f32)
+
+      :ok = InferAudio.Decoder.write_wav(path, tone, sample_rate: 8_000)
+      assert {:ok, %{samples: back, sample_rate: 8_000, channels: 1}} =
+               InferAudio.Decoder.decode_file(path)
+
+      assert Nx.size(back) == 800
+      # 16-bit PCM quantization error is at most 1/32768 per sample.
+      assert Nx.to_number(Nx.reduce_max(Nx.abs(Nx.subtract(back, tone)))) < 1.0e-3
+    end
+
+    @tag :tmp_dir
+    test "load_for_whisper resamples to 16 kHz mono", %{tmp_dir: dir} do
+      path = Path.join(dir, "tone.wav")
+      :ok = InferAudio.Decoder.write_wav(path, Nx.broadcast(Nx.tensor(0.1, type: :f32), {8_000}), sample_rate: 8_000)
+      pcm = InferAudio.Decoder.load_for_whisper(path)
+      assert_in_delta Nx.size(pcm), 16_000, 200
     end
   end
 end
