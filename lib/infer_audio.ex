@@ -1,10 +1,10 @@
 defmodule InferAudio do
   @moduledoc """
-  Nx-tensor audio I/O + model wrappers on ARM CPUs.
+  Nx-tensor audio I/O with a pluggable backend.
 
-  * `InferAudio.SileroVAD` — voice activity detection via tract-onnx
-  * `InferAudio.Piper` — text-to-speech via tract-onnx
-  * `InferAudio.Decoder` — file decode + resample (symphonia + rubato),
-    returning Nx tensors
+  * `InferAudio.Decoder` — decode audio files (WAV/MP3/FLAC/Ogg), downmix,
+    resample, and write WAV, returning and taking Nx tensors.
+
+  See `InferAudio.Backend` for how to configure the backend.
   """
 end
