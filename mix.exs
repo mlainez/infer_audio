@@ -7,13 +7,13 @@ defmodule InferAudio.MixProject do
     [
       app: :infer_audio,
       version: @version,
-      elixir: "~> 1.15",
+      elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      name: "Audio",
+      name: "InferAudio",
       description:
-        "Generic Nx-tensor audio I/O + model wrappers (Silero VAD / Piper TTS) with a pluggable native backend (see `InferAudio.Backend`).",
+        "Generic Nx-tensor audio I/O (decode, resample, WAV) with a pluggable native backend (see `InferAudio.Backend`).",
       package: package(),
       docs: [main: "readme", extras: ["README.md"]]
     ]
@@ -21,20 +21,15 @@ defmodule InferAudio.MixProject do
 
   def application, do: [extra_applications: [:logger]]
 
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:test), do: ["lib"]
   defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
     [
-      {:nx, "~> 0.9"},
-      {:nx_primitives, github: "mlainez/nx_primitives"},
-      # No dep on infer_vision — the backend handles VAD/Piper
-      # scoring internally so a Hailo / DSP / non-ONNX impl can
-      # plug in without dragging the vision stack along.
+      {:nx, "~> 0.12.0"},
+      # The ARM backend, for tests.
       {:arm_ai, github: "mlainez/arm_ai", only: [:dev, :test]},
-      {:nx_arm, github: "mlainez/nx_arm", only: [:dev, :test]},
-      {:rustler, "~> 0.36", optional: true},
-      {:rustler_precompiled, "~> 0.8"}
+      {:nx_arm, github: "mlainez/nx_arm", only: [:dev, :test]}
     ]
   end
 
